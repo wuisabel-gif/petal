@@ -234,6 +234,23 @@ def _cmd_status(args: argparse.Namespace) -> int:
     return 0 if report.ok else 2
 
 
+def _skill_source() -> Path:
+    candidates: list[Path] = []
+    try:
+        dist = metadata.distribution("petal-ros")
+        candidates.append(Path(dist.locate_file("skills/petal-cli")))
+    except metadata.PackageNotFoundError:
+        pass
+    candidates.append(Path(__file__).resolve().parent.parent / "skills" / "petal-cli")
+
+    for candidate in candidates:
+        if (candidate / "SKILL.md").is_file():
+            return candidate
+    raise FileNotFoundError(
+        "could not locate the petal-cli agent skill; reinstall petal-ros"
+    )
+
+
 def _cmd_install_agent_skill(args: argparse.Namespace) -> int:
     target_root = (
         Path(args.target).expanduser()
@@ -243,6 +260,7 @@ def _cmd_install_agent_skill(args: argparse.Namespace) -> int:
     target = target_root / "petal-cli"
 
     try:
+        source = _skill_source()
         if target.exists() or target.is_symlink():
             if not args.force:
                 print(f"agent skill already installed: {target}")
@@ -254,15 +272,7 @@ def _cmd_install_agent_skill(args: argparse.Namespace) -> int:
                 target.unlink()
 
         target_root.mkdir(parents=True, exist_ok=True)
-        dist = metadata.distribution("petal-ros")
-        source = Path(dist.locate_file("skills/petal-cli"))
         shutil.copytree(source, target)
-    except metadata.PackageNotFoundError as exc:
-        print(
-            f"petal: failed to install agent skill (petal-ros not installed): {exc}",
-            file=sys.stderr,
-        )
-        return 1
     except OSError as exc:
         print(f"petal: failed to install agent skill: {exc}", file=sys.stderr)
         return 1
